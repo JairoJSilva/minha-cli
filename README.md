@@ -12,7 +12,7 @@ O **`minha-cli`** é uma ferramenta CLI/TUI compilada nativamente em **Go** dese
 
 ## 📑 Sumário
 
-- [Por que em Go? Destaques e Vantagens](#-por-que-em-go-destaques-e-vantagens)
+
 - [🧠 Como Funciona o `mc switch` (Orquestração Simultânea)](#-como-funciona-o-mc-switch-orquestração-simultânea)
 - [📡 Auto-Descoberta e Proteção de Dados (`mc scan`)](#-auto-descoberta-e-proteção-de-dados-mc-scan--mc-leitura)
 - [Instalação e Compilação Rápida (1 Comando)](#-instalação-e-compilação-rápida-1-comando)
