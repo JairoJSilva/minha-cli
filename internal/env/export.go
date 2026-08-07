@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
@@ -55,15 +56,17 @@ func GetCurrentState() ActiveState {
 	}
 }
 
-// Gera o script shell a ser avaliado pelo wrapper (source <(mc env ...))
+// Gera o script shell a ser avaliado pelo wrapper
 func GenerateExportScript(c *config.Client) string {
 	var sb strings.Builder
 
 	// AWS
 	if c.AWSProfile != nil && *c.AWSProfile != "" {
 		sb.WriteString(fmt.Sprintf("export AWS_PROFILE=\"%s\"\n", *c.AWSProfile))
+		sb.WriteString(fmt.Sprintf("export AWS_DEFAULT_PROFILE=\"%s\"\n", *c.AWSProfile))
 	} else {
 		sb.WriteString("unset AWS_PROFILE\n")
+		sb.WriteString("unset AWS_DEFAULT_PROFILE\n")
 	}
 
 	// OCI
@@ -99,6 +102,7 @@ func GenerateExportScript(c *config.Client) string {
 // Gera o script shell de limpeza total
 func GenerateClearScript() string {
 	return `unset AWS_PROFILE
+unset AWS_DEFAULT_PROFILE
 unset AWS_ACCESS_KEY_ID
 unset AWS_SECRET_ACCESS_KEY
 unset AWS_SESSION_TOKEN
@@ -111,4 +115,18 @@ unset AZURE_SUBSCRIPTION
 unset AZURE_SUBSCRIPTION_NAME
 unset KUBECONFIG
 `
+}
+
+// Escreve as variáveis para o arquivo temporário IPC do shell do usuário
+func WriteEnvToFile(content string) {
+	// 1. Escreve no MC_ENV_OUT se definido pelo wrapper
+	if targetFile := os.Getenv("MC_ENV_OUT"); targetFile != "" {
+		_ = os.WriteFile(targetFile, []byte(content), 0600)
+	}
+
+	// 2. Escreve também em ~/.config/minha-cli/session.env como fallback
+	if home, err := os.UserHomeDir(); err == nil {
+		sessFile := filepath.Join(home, ".config", "minha-cli", "session.env")
+		_ = os.WriteFile(sessFile, []byte(content), 0600)
+	}
 }

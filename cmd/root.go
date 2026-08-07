@@ -29,6 +29,8 @@ Permite alternar simultaneamente AWS, Oracle OCI, GCP, Azure e Kubernetes.`,
 			runStatus()
 		case "test":
 			runTestParallel()
+		case "show":
+			runShowInteractive()
 		case "scan":
 			runScan()
 		case "add":
@@ -60,6 +62,7 @@ func init() {
 	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(testCmd)
+	rootCmd.AddCommand(showCmd)
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(editCmd)

@@ -10,43 +10,22 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:     "edit",
+	Use:     "edit [cliente]",
 	Aliases: []string{"editar", "update"},
 	Short:   "Edita configurações de um cliente existente",
 	Run: func(cmd *cobra.Command, args []string) {
-		runEditInteractive()
+		if len(args) > 0 {
+			runEditClientByID(args[0])
+		} else {
+			runEditInteractive()
+		}
 	},
 }
 
-func runEditInteractive() {
-	clients, err := config.LoadClients()
-	if err != nil || len(clients) == 0 {
-		tui.Warn("Nenhum cliente cadastrado para editar.")
-		return
-	}
-
-	var options []huh.Option[string]
-	for _, c := range clients {
-		options = append(options, huh.NewOption(c.Name, c.ID))
-	}
-
-	var selectedID string
-	formSelect := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Selecione o cliente para EDITAR").
-				Options(options...).
-				Value(&selectedID),
-		),
-	)
-
-	if err := formSelect.Run(); err != nil || selectedID == "" {
-		return
-	}
-
+func runEditClientByID(selectedID string) {
 	client, err := config.FindClient(selectedID)
 	if err != nil {
-		tui.Error("Cliente não encontrado.")
+		tui.Error(fmt.Sprintf("Cliente '%s' não encontrado.", selectedID))
 		return
 	}
 
@@ -56,6 +35,9 @@ func runEditInteractive() {
 	gcp := config.SafeString(client.GCPConfig)
 	azure := config.SafeString(client.AzureSub)
 	k8s := config.SafeString(client.K8sContext)
+
+	var configAWSKeys bool
+	var awsAccessKey, awsSecretKey string
 
 	formEdit := huh.NewForm(
 		huh.NewGroup(
@@ -85,6 +67,38 @@ func runEditInteractive() {
 		return
 	}
 
+	// Se o AWS profile preenchido não existir no ~/.aws/credentials, oferece gravar
+	if aws != "" && !checkAWSProfileExists(aws) {
+		formAWS := huh.NewForm(
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title(fmt.Sprintf("O profile AWS '%s' ainda não existe no ~/.aws/credentials. Deseja cadastrar as chaves agora?", aws)).
+					Value(&configAWSKeys),
+			),
+		)
+		_ = formAWS.Run()
+
+		if configAWSKeys {
+			formKeys := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Title("AWS Access Key ID").
+						Placeholder("AKIA...").
+						Value(&awsAccessKey),
+					huh.NewInput().
+						Title("AWS Secret Access Key").
+						EchoMode(huh.EchoModePassword).
+						Value(&awsSecretKey),
+				),
+			)
+			_ = formKeys.Run()
+			if awsAccessKey != "" && awsSecretKey != "" {
+				_ = saveAWSCredential(aws, awsAccessKey, awsSecretKey)
+				tui.Success(fmt.Sprintf("Chaves salvas no ~/.aws/credentials para o perfil '%s'!", aws))
+			}
+		}
+	}
+
 	updated := config.Client{
 		ID:         client.ID,
 		Name:       name,
@@ -101,6 +115,35 @@ func runEditInteractive() {
 	}
 
 	tui.Success(fmt.Sprintf("Cliente '%s' atualizado com sucesso!", name))
+}
+
+func runEditInteractive() {
+	clients, err := config.LoadClients()
+	if err != nil || len(clients) == 0 {
+		tui.Warn("Nenhum cliente cadastrado para editar.")
+		return
+	}
+
+	var options []huh.Option[string]
+	for _, c := range clients {
+		options = append(options, huh.NewOption(c.Name, c.ID))
+	}
+
+	var selectedID string
+	formSelect := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Selecione o cliente para EDITAR").
+				Options(options...).
+				Value(&selectedID),
+		),
+	)
+
+	if err := formSelect.Run(); err != nil || selectedID == "" {
+		return
+	}
+
+	runEditClientByID(selectedID)
 }
 
 var deleteCmd = &cobra.Command{

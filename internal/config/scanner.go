@@ -9,110 +9,171 @@ import (
 	"strings"
 )
 
-type ScanResult struct {
-	AWSProfiles   []string
-	OCIProfiles   []string
-	GCPConfigs    []string
-	K8sContexts   []string
-	AzureSubs     []string
+type AWSProfileDetail struct {
+	Name      string
+	AccessKey string
+	Region    string
+	Source    string
+}
+
+type OCIProfileDetail struct {
+	Name    string
+	Tenancy string
+	Region  string
+}
+
+type K8sContextDetail struct {
+	Name      string
+	Cluster   string
+	Namespace string
+}
+
+type GCPConfigDetail struct {
+	Name    string
+	Project string
+	Account string
+}
+
+type AzureSubDetail struct {
+	Name string
+	ID   string
+}
+
+type ScanReport struct {
+	AWSDetails    []AWSProfileDetail
+	OCIDetails    []OCIProfileDetail
+	GCPDetails    []GCPConfigDetail
+	K8sDetails    []K8sContextDetail
+	AzureDetails  []AzureSubDetail
 	ImportedCount int
 	ExistingCount int
 }
 
-func ScanLocalEnvironment() (*ScanResult, error) {
+func maskSecret(s string) string {
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "..." + s[len(s)-4:]
+}
+
+func ScanLocalEnvironmentDetailed() (*ScanReport, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
 
-	result := &ScanResult{}
+	report := &ScanReport{}
 
-	// 1. AWS Scanner (~/.aws/credentials e ~/.aws/config)
+	// 1. Scanner AWS Detalhado (~/.aws/credentials e ~/.aws/config)
 	awsCreds := filepath.Join(home, ".aws", "credentials")
 	if f, err := os.Open(awsCreds); err == nil {
 		defer f.Close()
-		re := regexp.MustCompile(`^\[(.*)\]$`)
 		scanner := bufio.NewScanner(f)
+		var currentProfile *AWSProfileDetail
+
 		for scanner.Scan() {
-			matches := re.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
-			if len(matches) > 1 {
-				p := strings.TrimSpace(matches[1])
-				if p != "" && !contains(result.AWSProfiles, p) {
-					result.AWSProfiles = append(result.AWSProfiles, p)
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+				if currentProfile != nil {
+					report.AWSDetails = append(report.AWSDetails, *currentProfile)
+				}
+				pName := strings.Trim(line, "[]")
+				currentProfile = &AWSProfileDetail{Name: pName, Source: "~/.aws/credentials", Region: "us-east-1"}
+			} else if currentProfile != nil {
+				if strings.HasPrefix(line, "aws_access_key_id") {
+					parts := strings.SplitN(line, "=", 2)
+					if len(parts) == 2 {
+						currentProfile.AccessKey = maskSecret(strings.TrimSpace(parts[1]))
+					}
 				}
 			}
 		}
-	}
-
-	awsConfig := filepath.Join(home, ".aws", "config")
-	if f, err := os.Open(awsConfig); err == nil {
-		defer f.Close()
-		re := regexp.MustCompile(`^\[(?:profile\s+)?(.*)\]$`)
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			matches := re.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
-			if len(matches) > 1 {
-				p := strings.TrimSpace(matches[1])
-				if p != "" && !contains(result.AWSProfiles, p) {
-					result.AWSProfiles = append(result.AWSProfiles, p)
-				}
-			}
+		if currentProfile != nil {
+			report.AWSDetails = append(report.AWSDetails, *currentProfile)
 		}
 	}
 
-	// 2. OCI Scanner (~/.oci/config)
+	// 2. Scanner Oracle OCI Detalhado (~/.oci/config)
 	ociConfig := filepath.Join(home, ".oci", "config")
 	if f, err := os.Open(ociConfig); err == nil {
 		defer f.Close()
-		re := regexp.MustCompile(`^\[(.*)\]$`)
 		scanner := bufio.NewScanner(f)
+		var currentOCI *OCIProfileDetail
+
 		for scanner.Scan() {
-			matches := re.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
-			if len(matches) > 1 {
-				p := strings.TrimSpace(matches[1])
-				if p != "" && !contains(result.OCIProfiles, p) {
-					result.OCIProfiles = append(result.OCIProfiles, p)
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+				if currentOCI != nil {
+					report.OCIDetails = append(report.OCIDetails, *currentOCI)
 				}
+				pName := strings.Trim(line, "[]")
+				currentOCI = &OCIProfileDetail{Name: pName, Region: "sa-saopaulo-1"}
+			} else if currentOCI != nil {
+				if strings.HasPrefix(line, "tenancy=") {
+					parts := strings.SplitN(line, "=", 2)
+					if len(parts) == 2 {
+						currentOCI.Tenancy = maskSecret(strings.TrimSpace(parts[1]))
+					}
+				} else if strings.HasPrefix(line, "region=") {
+					parts := strings.SplitN(line, "=", 2)
+					if len(parts) == 2 {
+						currentOCI.Region = strings.TrimSpace(parts[1])
+					}
+				}
+			}
+		}
+		if currentOCI != nil {
+			report.OCIDetails = append(report.OCIDetails, *currentOCI)
+		}
+	}
+
+	// 3. Scanner Kubernetes Detalhado (kubectl)
+	if out, err := exec.Command("kubectl", "config", "get-contexts", "--no-headers").Output(); err == nil {
+		lines := strings.Split(string(out), "\n")
+		for _, l := range lines {
+			fields := strings.Fields(l)
+			if len(fields) >= 2 {
+				name := fields[0]
+				if name == "*" && len(fields) >= 3 {
+					name = fields[1]
+				}
+				cluster := fields[len(fields)-2]
+				report.K8sDetails = append(report.K8sDetails, K8sContextDetail{
+					Name:    name,
+					Cluster: cluster,
+				})
 			}
 		}
 	}
 
-	// 3. GCP Scanner (~/.config/gcloud/configurations/)
+	// 4. Scanner Google Cloud (~/.config/gcloud/configurations/)
 	gcpDir := filepath.Join(home, ".config", "gcloud", "configurations")
 	if entries, err := os.ReadDir(gcpDir); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasPrefix(e.Name(), "config_") {
 				cname := strings.TrimPrefix(e.Name(), "config_")
-				if cname != "" && !contains(result.GCPConfigs, cname) {
-					result.GCPConfigs = append(result.GCPConfigs, cname)
+				if cname != "" {
+					report.GCPDetails = append(report.GCPDetails, GCPConfigDetail{Name: cname})
 				}
 			}
 		}
 	}
 
-	// 4. Kubernetes Scanner via kubectl
-	if out, err := exec.Command("kubectl", "config", "get-contexts", "-o", "name").Output(); err == nil {
-		lines := strings.Split(string(out), "\n")
+	// 5. Scanner Azure
+	if out, err := exec.Command("az", "account", "list", "--query", "[].{name:name, id:id}", "-o", "tsv").Output(); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 		for _, l := range lines {
-			l = strings.TrimSpace(l)
-			if l != "" && !contains(result.K8sContexts, l) {
-				result.K8sContexts = append(result.K8sContexts, l)
+			parts := strings.Split(l, "\t")
+			if len(parts) >= 2 {
+				report.AzureDetails = append(report.AzureDetails, AzureSubDetail{
+					Name: parts[0],
+					ID:   maskSecret(parts[1]),
+				})
 			}
 		}
 	}
 
-	// 5. Azure Scanner (~/.azure/azureProfile.json ou az CLI)
-	if out, err := exec.Command("az", "account", "list", "--query", "[].name", "-o", "tsv").Output(); err == nil {
-		lines := strings.Split(string(out), "\n")
-		for _, l := range lines {
-			l = strings.TrimSpace(l)
-			if l != "" && !contains(result.AzureSubs, l) {
-				result.AzureSubs = append(result.AzureSubs, l)
-			}
-		}
-	}
-
-	// 6. Fusão inteligente no clients.json
+	// 6. Fusão com clients.json sem sobrescrever
 	clients, _ := LoadClients()
 	existingKeys := make(map[string]bool)
 	for _, c := range clients {
@@ -120,81 +181,24 @@ func ScanLocalEnvironment() (*ScanResult, error) {
 		existingKeys[strings.ToLower(c.Name)] = true
 	}
 
-	// Lista de chaves descobertas
-	var discoveredSlugs []string
-	addSlug := func(s string) {
-		slug := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(s, ""))
-		if slug != "" && slug != "default" && !contains(discoveredSlugs, slug) {
-			discoveredSlugs = append(discoveredSlugs, slug)
-		}
-	}
-
-	for _, p := range result.AWSProfiles {
-		addSlug(p)
-	}
-	for _, p := range result.OCIProfiles {
-		addSlug(p)
-	}
-	for _, p := range result.GCPConfigs {
-		addSlug(p)
-	}
-
-	for _, slug := range discoveredSlugs {
-		if existingKeys[slug] {
-			result.ExistingCount++
+	for _, awsP := range report.AWSDetails {
+		slug := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(awsP.Name, ""))
+		if slug == "" || slug == "default" {
 			continue
 		}
 
-		// Procura correspondência
-		var awsP, ociP, gcpP, k8sP *string
-
-		for _, p := range result.AWSProfiles {
-			if strings.Contains(strings.ToLower(p), slug) {
-				awsP = StringPtr(p)
-				break
-			}
-		}
-		for _, p := range result.OCIProfiles {
-			if strings.Contains(strings.ToLower(p), slug) {
-				ociP = StringPtr(p)
-				break
-			}
-		}
-		for _, p := range result.GCPConfigs {
-			if strings.Contains(strings.ToLower(p), slug) {
-				gcpP = StringPtr(p)
-				break
-			}
-		}
-		for _, p := range result.K8sContexts {
-			if strings.Contains(strings.ToLower(p), slug) {
-				k8sP = StringPtr(p)
-				break
-			}
-		}
-
-		displayName := strings.Title(slug) + " (Importado)"
-		newClient := Client{
-			ID:         slug,
-			Name:       displayName,
-			AWSProfile: awsP,
-			OCIProfile: ociP,
-			GCPConfig:  gcpP,
-			K8sContext: k8sP,
-		}
-
-		_ = AddClient(newClient)
-		result.ImportedCount++
-	}
-
-	return result, nil
-}
-
-func contains(slice []string, val string) bool {
-	for _, item := range slice {
-		if strings.EqualFold(item, val) {
-			return true
+		if existingKeys[slug] {
+			report.ExistingCount++
+		} else {
+			displayName := strings.Title(slug) + " (Importado)"
+			_ = AddClient(Client{
+				ID:         slug,
+				Name:       displayName,
+				AWSProfile: StringPtr(awsP.Name),
+			})
+			report.ImportedCount++
 		}
 	}
-	return false
+
+	return report, nil
 }

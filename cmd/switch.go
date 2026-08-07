@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
+	"github.com/JairoJSilva/minha-cli/internal/env"
 	"github.com/JairoJSilva/minha-cli/internal/tui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -22,6 +26,33 @@ var switchCmd = &cobra.Command{
 	},
 }
 
+func checkAWSProfileExists(profile string) bool {
+	if profile == "" || profile == "default" {
+		return true
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return true
+	}
+
+	credPath := filepath.Join(home, ".aws", "credentials")
+	if data, err := os.ReadFile(credPath); err == nil {
+		if strings.Contains(string(data), "["+profile+"]") {
+			return true
+		}
+	}
+
+	confPath := filepath.Join(home, ".aws", "config")
+	if data, err := os.ReadFile(confPath); err == nil {
+		if strings.Contains(string(data), "["+profile+"]") || strings.Contains(string(data), "[profile "+profile+"]") {
+			return true
+		}
+	}
+
+	return false
+}
+
 func applyClientDirect(target string) {
 	client, err := config.FindClient(target)
 	if err != nil {
@@ -29,10 +60,18 @@ func applyClientDirect(target string) {
 		return
 	}
 
+	// 1. Gera o script shell e grava no IPC file para o terminal pai carregar
+	script := env.GenerateExportScript(client)
+	env.WriteEnvToFile(script)
+
+	// 2. Feedback visual
 	tui.Success(fmt.Sprintf("Contexto ativado: %s", client.Name))
 	aws := "<nenhum>"
 	if client.AWSProfile != nil {
 		aws = *client.AWSProfile
+		if !checkAWSProfileExists(aws) {
+			fmt.Printf("  \033[33m⚠️  Aviso: O profile AWS '%s' não está no ~/.aws/credentials. (Rode 'aws configure --profile %s' se precisar das chaves)\033[0m\n", aws, aws)
+		}
 	}
 	oci := "<nenhum>"
 	if client.OCIProfile != nil {
