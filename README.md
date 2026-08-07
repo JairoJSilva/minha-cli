@@ -30,19 +30,6 @@ O **`minha-cli`** é uma ferramenta CLI/TUI compilada nativamente em **Go** dese
 - [Arquitetura do Projeto em Go](#-arquitetura-do-projeto-em-go)
 - [Pré-requisitos](#-pré-requisitos)
 
----
-
-## 🚀 Por que em Go? Destaques e Vantagens
-
-- 📦 **Binário Único Standalone**: Distribuição de um executável compilado de alta performance sem dependências externas de script.
-- ⚡ **Goroutines e Testes em Paralelo (`mc test`)**: O diagnóstico de WhoAmI consulta AWS STS, Oracle OCI e Kubernetes simultaneamente em paralelo, retornando o resultado em menos de 200ms.
-- 🎨 **TUI Moderna com Bubbletea, Lipgloss e Huh**: Menus selecionáveis com teclado, formulários com validação em tempo real e cards com bordas arredondadas.
-- 🔄 **Orquestração Multi-Cloud & K8s**: Exporta e atualiza simultaneamente `AWS_PROFILE`, `OCI_CLI_PROFILE`, `CLOUDSDK_ACTIVE_CONFIG_NAME`, `AZURE_SUBSCRIPTION` e o contexto do `kubectl`.
-- 📡 **Auto-Descoberta (`mc scan` / `mc leitura`)**: Varre o terminal (`~/.aws`, `~/.oci`, `~/.kube`, GCP, Azure) e importa tudo automaticamente sem perda de dados.
-- ⚡ **Otimização com RTK Proxy**: Suporte nativo a consultas ultra-rápidas e condensadas quando o `rtk` estiver presente.
-- 🧹 **Reset de Segurança**: Limpa todas as variáveis de ambiente das nuvens com um único comando (`mc clear`), prevenindo execuções acidentais em contas de clientes.
-
----
 
 ## 🧠 Como Funciona o `mc switch` (Orquestração Simultânea)
 
