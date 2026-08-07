@@ -14,6 +14,7 @@ fi
 source "$CLI_DIR/core/ui.sh"
 source "$CLI_DIR/core/state.sh"
 source "$CLI_DIR/core/config.sh"
+source "$CLI_DIR/core/scanner.sh"
 source "$CLI_DIR/providers/aws.sh"
 source "$CLI_DIR/providers/oci.sh"
 source "$CLI_DIR/providers/gcp.sh"
@@ -30,10 +31,11 @@ show_help() {
     ui_banner
     echo -e "\n\033[1mUso:\033[0m"
     echo -e "  \033[36mmc\033[0m                           Abre o menu interativo TUI"
+    echo -e "  \033[36mmc scan | leitura\033[0m            Escaneia e importa perfis já existentes no terminal (AWS, OCI, K8s, GCP, Azure)"
     echo -e "  \033[36mmc switch <cliente>\033[0m          Troca para o perfil informado (ex: maida, dentalis, farmacia, flowti)"
     echo -e "  \033[36mmc add | novo\033[0m                Cadastra uma nova conta/cliente interativamente"
     echo -e "  \033[36mmc edit | editar\033[0m             Edita as configurações de uma conta existente"
-    echo -e "  \033[36mmc delete | apagar\033[0m           Remove uma conta/cliente cadastrado"
+    echo -e "  \033[36mmc delete | apagar\033[0m           Remove uma conta/cliente cadastrado com segurança"
     echo -e "  \033[36mmc list | listar\033[0m             Lista todos os clientes e perfis cadastrados"
     echo -e "  \033[36mmc status\033[0m                    Exibe o status do contexto ativo no terminal"
     echo -e "  \033[36mmc test | whoami\033[0m             Testa as credenciais ativas nas APIs das nuvens"
@@ -106,15 +108,16 @@ interactive_menu() {
             "☁️  1. Trocar Contexto de Nuvem (Switch Profile)" \
             "📊 2. Status do Contexto Ativo" \
             "🔍 3. Testar Conexão / WhoAmI (AWS & OCI & K8s)" \
-            "➕ 4. Configurar Nova Conta / Cliente (Add)" \
-            "✏️  5. Editar Conta / Cliente Existente (Edit)" \
-            "🗑️  6. Apagar Conta / Cliente (Delete)" \
-            "📁 7. Mapeamento de Perfis Cadastrados" \
-            "☸️  8. Kubernetes (Status do Cluster)" \
-            "🧹 9. Limpar Contexto (Reset de Variáveis)" \
-            "🚪 10. Sair")
+            "📡 4. Escanear e Importar Configurações Locais (Scan / Leitura)" \
+            "➕ 5. Configurar Nova Conta / Cliente (Add)" \
+            "✏️  6. Editar Conta / Cliente Existente (Edit)" \
+            "🗑️  7. Apagar Conta / Cliente (Delete)" \
+            "📁 8. Mapeamento de Perfis Cadastrados" \
+            "☸️  9. Kubernetes (Status do Cluster)" \
+            "🧹 10. Limpar Contexto (Reset de Variáveis)" \
+            "🚪 11. Sair")
     else
-        echo "1) Trocar Contexto  2) Status  3) Testar WhoAmI  4) Novo Cliente  5) Editar  6) Apagar  7) Listar  8) K8s  9) Limpar  10) Sair"
+        echo "1) Trocar Contexto  2) Status  3) Testar WhoAmI  4) Scan  5) Novo Cliente  6) Editar  7) Apagar  8) Listar  9) K8s  10) Limpar  11) Sair"
         read -rp "Opção: " choice
     fi
 
@@ -128,23 +131,26 @@ interactive_menu() {
         *"3. Testar Conexão"*)
             action_test_all
             ;;
-        *"4. Configurar Nova Conta"*)
+        *"4. Escanear e Importar"*)
+            scan_and_import_existing_configs
+            ;;
+        *"5. Configurar Nova Conta"*)
             add_client_interactive
             ;;
-        *"5. Editar Conta"*)
+        *"6. Editar Conta"*)
             edit_client_interactive
             ;;
-        *"6. Apagar Conta"*)
+        *"7. Apagar Conta"*)
             delete_client_interactive
             ;;
-        *"7. Mapeamento"*)
+        *"8. Mapeamento"*)
             ui_section "Perfis Configurados e Detectados"
             discover_local_profiles
             ;;
-        *"8. Kubernetes"*)
+        *"9. Kubernetes"*)
             test_k8s_connection || true
             ;;
-        *"9. Limpar Contexto"*)
+        *"10. Limpar Contexto"*)
             clear_all_contexts
             ;;
         *)
@@ -159,6 +165,9 @@ main() {
     local cmd="${1:-}"
 
     case "$cmd" in
+        "scan"|"leitura"|"importar"|"import")
+            scan_and_import_existing_configs
+            ;;
         "switch"|"s")
             action_switch "${2:-}"
             ;;

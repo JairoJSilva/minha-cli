@@ -13,17 +13,19 @@ O **`minha-cli`** é uma ferramenta de linha de comando (CLI/TUI) desenvolvida p
 
 - [Destaques e Funcionalidades](#-destaques-e-funcionalidades)
 - [🧠 Como Funciona o `mc switch` (Orquestração Simultânea)](#-como-funciona-o-mc-switch-orquestração-simultânea)
+- [📡 Auto-Descoberta e Proteção de Dados (`mc scan`)](#-auto-descoberta-e-proteção-de-dados-mc-scan--mc-leitura)
 - [Instalação Rápida (1 Comando)](#-instalação-rápida-1-comando)
 - [Tabela Rápida de Comandos](#-tabela-rápida-de-comandos)
 - [Guia de Uso Passo a Passo](#-guia-de-uso-passo-a-passo)
   - [1. Menu Interativo Visual (`mc`)](#1-menu-interativo-visual-mc)
-  - [2. Cadastrar Novo Cliente (`mc add`)](#2-cadastrar-novo-cliente-mc-add)
-  - [3. Alternar de Contexto (`mc switch`)](#3-alternar-de-contexto-mc-switch)
-  - [4. Visualizar Contexto Ativo (`mc status`)](#4-visualizar-contexto-ativo-mc-status)
-  - [5. Testar Credenciais nas APIs (`mc test`)](#5-testar-credenciais-nas-apis-mc-test)
-  - [6. Editar Cliente Existente (`mc edit`)](#6-editar-cliente-existente-mc-edit)
-  - [7. Apagar Cliente (`mc delete`)](#7-apagar-cliente-mc-delete)
-  - [8. Limpar Variáveis de Ambiente (`mc clear`)](#8-limpar-variáveis-de-ambiente-mc-clear)
+  - [2. Escanear e Importar Configurações (`mc scan`)](#2-escanear-e-importar-configurações-mc-scan)
+  - [3. Cadastrar Novo Cliente (`mc add`)](#3-cadastrar-novo-cliente-mc-add)
+  - [4. Alternar de Contexto (`mc switch`)](#4-alternar-de-contexto-mc-switch)
+  - [5. Visualizar Contexto Ativo (`mc status`)](#5-visualizar-contexto-ativo-mc-status)
+  - [6. Testar Credenciais nas APIs (`mc test`)](#6-testar-credenciais-nas-apis-mc-test)
+  - [7. Editar Cliente Existente (`mc edit`)](#7-editar-cliente-existente-mc-edit)
+  - [8. Apagar Cliente (`mc delete`)](#8-apagar-cliente-mc-delete)
+  - [9. Limpar Variáveis de Ambiente (`mc clear`)](#9-limpar-variáveis-de-ambiente-mc-clear)
 - [Arquitetura Modular do Projeto](#-arquitetura-modular-do-projeto)
 - [Pré-requisitos e Dependências](#-pré-requisitos-e-dependências)
 
@@ -33,11 +35,30 @@ O **`minha-cli`** é uma ferramenta de linha de comando (CLI/TUI) desenvolvida p
 
 - 🔄 **Troca de Contexto Multi-Cloud em 1 Segundo**: Exporta e atualiza simultaneamente `AWS_PROFILE`, `OCI_CLI_PROFILE`, `CLOUDSDK_ACTIVE_CONFIG_NAME`, `AZURE_SUBSCRIPTION` e o contexto do `kubectl`.
 - 🧠 **Orquestração Inteligente Total**: Conecta você a **TUDO** do cliente em uma única ação (todas as nuvens vinculadas e o cluster Kubernetes correspondente).
+- 📡 **`mc scan` / `mc leitura` (Proteção & Auto-Descoberta)**: Varre o terminal do usuário (`~/.aws`, `~/.oci`, `~/.kube`, GCP, Azure) e importa tudo automaticamente sem perder nenhuma configuração preexistente.
 - ➕ **CRUD Completo de Clientes**: Cadastre, edite, remova e liste clientes diretamente pelo terminal ou pelo menu visual.
 - 🎨 **Interface Rica com Charm Gum**: Menus selecionáveis, banners estilizados, spinners de carregamento e confirmações de segurança com fallback nativo em ANSI.
 - 🔍 **Testes de Conexão WhoAmI**: Valida se suas credenciais estão ativas consultando as APIs da AWS (STS) e Oracle OCI em tempo real.
 - ⚡ **Otimização com RTK Proxy**: Suporte nativo a comandos ultra-rápidos e condensados quando o `rtk` estiver disponível.
 - 🧹 **Reset de Segurança**: Limpa todas as variáveis de ambiente das nuvens com um único comando (`mc clear`), prevenindo execuções acidentais em contas de clientes.
+
+---
+
+## 📡 Auto-Descoberta e Proteção de Dados (`mc scan` / `mc leitura`)
+
+> **Nenhuma configuração preexistente é perdida!**
+
+Ao rodar `mc scan` (ou `mc leitura`), o Minha-CLI realiza uma varredura completa e segura no ambiente do usuário:
+
+1. 🔍 **AWS**: Lê todos os perfis cadastrados em `~/.aws/credentials` e `~/.aws/config`.
+2. 🏛️ **Oracle OCI**: Lê os perfis e tenancies em `~/.oci/config`.
+3. ☸️ **Kubernetes**: Detecta clusters e contextos configurados no `kubectl` (`~/.kube/config`).
+4. 🌐 **Google Cloud**: Lê as configurações ativas em `~/.config/gcloud/configurations/`.
+5. 🔷 **Microsoft Azure**: Lê as assinaturas cadastradas em `~/.azure/azureProfile.json`.
+
+**O que o scanner faz:**
+- Cruza os dados encontrados e cadastra automaticamente novos clientes no `config/clients.json`.
+- **Preserva 100%** dos dados e personalizações que o usuário já tinha cadastrado.
 
 ---
 
@@ -94,13 +115,6 @@ chmod +x install.sh && ./install.sh
 source ~/.bashrc
 ```
 
-> **O que o instalador faz automaticamente:**
-> - Valida e instala dependências necessárias (`jq`).
-> - Aplica permissões de execução nos scripts (`chmod +x`).
-> - Cria o diretório de dados em `~/.config/minha-cli/clients.json`.
-> - Cria o binário no PATH do usuário (`~/.local/bin/mc`).
-> - Injeta os aliases `mc` e `nuvem` com suporte a `source` no `~/.bashrc`, `~/.zshrc` e `~/.bash_profile`.
-
 ---
 
 ## ⚡ Tabela Rápida de Comandos
@@ -108,6 +122,7 @@ source ~/.bashrc
 | Comando | Atalho | Descrição |
 |---|---|---|
 | `mc` | `nuvem` | Abre o **Menu Interativo (TUI)** com todas as opções |
+| `mc scan` | `mc leitura` | **Escaneia e importa configurações locais** sem perder nada |
 | `mc add` | `mc novo` | **Cadastra um novo cliente/conta** interativamente |
 | `mc edit` | `mc editar` | **Edita as configurações** de um cliente cadastrado |
 | `mc delete` | `mc apagar` | **Remove um cliente** com confirmação de segurança |
@@ -130,44 +145,30 @@ Basta digitar `mc` ou `nuvem` para navegar com as setas do teclado:
 mc
 ```
 
-```
-  ╔══════════════════════════════════════════════════════════════╗
-  ║          ☁️   MINHA CLI - MULTI-CLOUD & SRE CONTEXT           ║
-  ║        AWS • Oracle OCI • Google Cloud • Azure • K8s         ║
-  ╚══════════════════════════════════════════════════════════════╝
+---
 
-  > ☁️  1. Trocar Contexto de Nuvem (Switch Profile)
-    📊 2. Status do Contexto Ativo
-    🔍 3. Testar Conexão / WhoAmI (AWS & OCI & K8s)
-    ➕ 4. Configurar Nova Conta / Cliente (Add)
-    ✏️  5. Editar Conta / Cliente Existente (Edit)
-    🗑️  6. Apagar Conta / Cliente (Delete)
-    📁 7. Mapeamento de Perfis Cadastrados
-    ☸️  8. Kubernetes (Status do Cluster)
-    🧹 9. Limpar Contexto (Reset de Variáveis)
-    🚪 10. Sair
+### 2. Escanear e Importar Configurações (`mc scan`)
+Para quem acabou de clonar o projeto e já tem credenciais configuradas na máquina:
+
+```bash
+mc scan
+# ou
+mc leitura
 ```
+O Minha-CLI detecta seus arquivos de configuração da AWS, OCI, K8s, GCP e Azure e importa automaticamente.
 
 ---
 
-### 2. Cadastrar Novo Cliente (`mc add`)
+### 3. Cadastrar Novo Cliente (`mc add`)
 Para adicionar um novo cliente à base de dados da CLI:
 
 ```bash
 mc add
 ```
-O assistente solicitará os dados de forma guiada:
-- **Nome de exibição**: `Hospital Albert Einstein`
-- **ID curto / Slug**: `einstein`
-- **AWS Profile**: `einstein-prod` *(opcional)*
-- **Oracle OCI Profile**: `einstein-oci` *(opcional)*
-- **Google Cloud Config**: `einstein-gcp` *(opcional)*
-- **Azure Subscription**: `ID-SUBSCRIPTION` *(opcional)*
-- **Contexto K8s**: `cluster-einstein` *(opcional)*
 
 ---
 
-### 3. Alternar de Contexto (`mc switch`)
+### 4. Alternar de Contexto (`mc switch`)
 Você pode alternar pelo menu ou passando o nome direto:
 
 ```bash
@@ -183,27 +184,16 @@ mc switch flowti
 
 ---
 
-### 4. Visualizar Contexto Ativo (`mc status`)
+### 5. Visualizar Contexto Ativo (`mc status`)
 Veja instantaneamente qual conta e cluster estão selecionados no seu terminal:
 
 ```bash
 mc status
 ```
 
-```
- ┌─────────────────────────────────┐ 
- │ 📊 STATUS DO CONTEXTO ATIVO     │ 
- │  AWS Profile  : dentalis        │ 
- │  OCI Profile  : <não definido>  │ 
- │  GCP Config   : <não definido>  │ 
- │  Azure Context: <padrão/sessão> │ 
- │  Kubernetes   : oci-mv-devops   │ 
- └─────────────────────────────────┘ 
-```
-
 ---
 
-### 5. Testar Credenciais nas APIs (`mc test`)
+### 6. Testar Credenciais nas APIs (`mc test`)
 Faz chamadas com spinner às APIs da AWS (STS) e Oracle OCI para verificar a validade das chaves:
 
 ```bash
@@ -212,27 +202,25 @@ mc test
 
 ---
 
-### 6. Editar Cliente Existente (`mc edit`)
+### 7. Editar Cliente Existente (`mc edit`)
 Se precisar alterar um profile AWS, subscription Azure ou contexto Kubernetes:
 
 ```bash
 mc edit
 ```
-Selecione o cliente na lista e atualize os valores desejados.
 
 ---
 
-### 7. Apagar Cliente (`mc delete`)
+### 8. Apagar Cliente (`mc delete`)
 Para remover uma conta que não é mais utilizada:
 
 ```bash
 mc delete
 ```
-O sistema pedirá uma confirmação (`Y/n`) para evitar exclusões acidentais.
 
 ---
 
-### 8. Limpar Variáveis de Ambiente (`mc clear`)
+### 9. Limpar Variáveis de Ambiente (`mc clear`)
 Para resetar o terminal no final do expediente ou antes de trocar de projeto sensível:
 
 ```bash
@@ -250,6 +238,7 @@ minha-cli/
 ├── config/
 │   └── clients.json               # Base de dados estruturada de clientes e contas
 ├── core/
+│   ├── scanner.sh                 # Módulo de auto-descoberta e importação segura (mc scan)
 │   ├── ui.sh                      # Componentes visuais, cards, spinners e banners (gum/ansi)
 │   ├── config.sh                  # CRUD de clientes (Add, Edit, Delete, List e Apply)
 │   └── state.sh                   # Leitura de variáveis ativas e rotina de reset
