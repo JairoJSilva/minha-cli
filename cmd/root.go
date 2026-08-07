@@ -9,8 +9,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "mc",
-	Short: "Minha-CLI - Multi-Cloud & SRE Context Manager",
+	Use:     "mc",
+	Version: AppVersion,
+	Short:   "Minha-CLI - Multi-Cloud & SRE Context Manager",
 	Long: `☁️  Minha-CLI (Go Edition)
 Gerenciador de contextos de nuvem de alta performance para SREs e DevOps.
 Permite alternar simultaneamente AWS, Oracle OCI, GCP, Azure e Kubernetes.`,
@@ -45,6 +46,8 @@ Permite alternar simultaneamente AWS, Oracle OCI, GCP, Azure e Kubernetes.`,
 			runK8s()
 		case "clear":
 			runClear()
+		case "version":
+			runVersion()
 		default:
 			// Sair
 		}
@@ -71,4 +74,5 @@ func init() {
 	rootCmd.AddCommand(clearCmd)
 	rootCmd.AddCommand(envCmd)
 	rootCmd.AddCommand(k8sCmd)
+	rootCmd.AddCommand(versionCmd)
 }

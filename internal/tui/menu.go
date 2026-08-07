@@ -32,7 +32,8 @@ func InitialMenuModel() MenuModel {
 			{Title: "📁  9. Mapeamento de Perfis Cadastrados (List)", Key: "list"},
 			{Title: "☸️  10. Kubernetes (Status do Cluster)", Key: "k8s"},
 			{Title: "🧹  11. Limpar Contexto (Reset de Variáveis)", Key: "clear"},
-			{Title: "🚪  12. Sair", Key: "exit"},
+			{Title: "ℹ️   12. Sobre / Versão da CLI (Version)", Key: "version"},
+			{Title: "🚪  13. Sair", Key: "exit"},
 		},
 		Cursor: 0,
 	}
