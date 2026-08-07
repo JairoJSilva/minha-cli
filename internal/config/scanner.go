@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,13 +41,15 @@ type AzureSubDetail struct {
 }
 
 type ScanReport struct {
-	AWSDetails    []AWSProfileDetail
-	OCIDetails    []OCIProfileDetail
-	GCPDetails    []GCPConfigDetail
-	K8sDetails    []K8sContextDetail
-	AzureDetails  []AzureSubDetail
-	ImportedCount int
-	ExistingCount int
+	AWSDetails      []AWSProfileDetail
+	OCIDetails      []OCIProfileDetail
+	GCPDetails      []GCPConfigDetail
+	K8sDetails      []K8sContextDetail
+	AzureDetails    []AzureSubDetail
+	ImportedCount   int
+	ExistingCount   int
+	TotalRegistered int
+	RegisteredNames []string
 }
 
 func maskSecret(s string) string {
@@ -173,23 +176,25 @@ func ScanLocalEnvironmentDetailed() (*ScanReport, error) {
 		}
 	}
 
-	// 6. Fusão com clients.json sem sobrescrever
+	// 6. Carrega os clientes já cadastrados no clients.json
 	clients, _ := LoadClients()
+	report.TotalRegistered = len(clients)
 	existingKeys := make(map[string]bool)
 	for _, c := range clients {
 		existingKeys[strings.ToLower(c.ID)] = true
 		existingKeys[strings.ToLower(c.Name)] = true
+		report.RegisteredNames = append(report.RegisteredNames, fmt.Sprintf("%s [%s]", c.Name, c.ID))
 	}
+	report.ExistingCount = len(clients)
 
+	// 7. Auto-importação de novos perfis encontrados
 	for _, awsP := range report.AWSDetails {
 		slug := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(awsP.Name, ""))
 		if slug == "" || slug == "default" {
 			continue
 		}
 
-		if existingKeys[slug] {
-			report.ExistingCount++
-		} else {
+		if !existingKeys[slug] {
 			displayName := strings.Title(slug) + " (Importado)"
 			_ = AddClient(Client{
 				ID:         slug,
@@ -197,6 +202,9 @@ func ScanLocalEnvironmentDetailed() (*ScanReport, error) {
 				AWSProfile: StringPtr(awsP.Name),
 			})
 			report.ImportedCount++
+			report.RegisteredNames = append(report.RegisteredNames, fmt.Sprintf("%s [%s]", displayName, slug))
+			report.TotalRegistered++
+			existingKeys[slug] = true
 		}
 	}
 

@@ -78,9 +78,22 @@ func runScan() {
 		tui.PrintCard("🌐 GOOGLE CLOUD & AZURE DETECTADOS", strings.TrimRight(otherLines.String(), "\n"))
 	}
 
-	tui.Success("Varredura concluída com proteção total de dados!")
-	fmt.Printf("  \033[32m✔ %d novo(s) cliente(s) importado(s) automaticamente para a CLI.\033[0m\n", report.ImportedCount)
-	fmt.Printf("  \033[36m✔ %d perfil(is) já existentes foram preservados intactos.\033[0m\n\n", report.ExistingCount)
+	// 5. Card com o Resumo Geral de Contas
+	var regList strings.Builder
+	for _, name := range report.RegisteredNames {
+		regList.WriteString(fmt.Sprintf("   ✔ %s\n", name))
+	}
+
+	summaryBody := fmt.Sprintf(` 📦 Total de Contas no CLI : %d cliente(s) cadastrado(s)
+ 🛡️  Contas Preservadas      : %d cliente(s) intactos sem conflitos
+ ➕ Contas Novas Importadas : %d novo(s) cliente(s)
+
+ 📋 Lista de Clientes Ativos no Minha-CLI:
+%s`,
+		report.TotalRegistered, report.ExistingCount, report.ImportedCount, strings.TrimRight(regList.String(), "\n"))
+
+	tui.PrintCard("RESUMO DO BANCO DE DADOS LOCAL (MINHA-CLI)", summaryBody)
+	tui.Success("Varredura e sincronização concluídas com sucesso!")
 }
 
 var clearCmd = &cobra.Command{
