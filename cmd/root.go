@@ -16,40 +16,48 @@ var rootCmd = &cobra.Command{
 Gerenciador de contextos de nuvem de alta performance para SREs e DevOps.
 Permite alternar simultaneamente AWS, Oracle OCI, GCP, Azure e Kubernetes.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Se nenhum subcomando for passado, abre a TUI interativa
-		selected, err := tui.RunMenu()
-		if err != nil {
-			fmt.Printf("Erro ao executar menu: %v\n", err)
-			return
-		}
+		// Banner exibido uma única vez na abertura
+		tui.PrintBanner()
 
-		switch selected {
-		case "switch":
-			runSwitchInteractive()
-		case "status":
-			runStatus()
-		case "test":
-			runTestParallel()
-		case "show":
-			runShowInteractive()
-		case "scan":
-			runScan()
-		case "add":
-			runAddInteractive()
-		case "edit":
-			runEditInteractive()
-		case "delete":
-			runDeleteInteractive()
-		case "list":
-			runList()
-		case "k8s":
-			runK8s()
-		case "clear":
-			runClear()
-		case "version":
-			runVersion()
-		default:
-			// Sair
+		// Loop principal: o menu reabre após cada ação
+		for {
+			selected, err := tui.RunMenuLoop()
+			if err != nil {
+				fmt.Printf("Erro ao executar menu: %v\n", err)
+				return
+			}
+
+			// Sair: seleção vazia (q/ESC) ou opção "exit"
+			if selected == "" || selected == "exit" {
+				return
+			}
+
+			switch selected {
+			case "switch":
+				runSwitchInteractive()
+			case "status":
+				runStatus()
+			case "test":
+				runTestParallel()
+			case "show":
+				runShowInteractive()
+			case "scan":
+				runScan()
+			case "add":
+				runAddInteractive()
+			case "edit":
+				runEditInteractive()
+			case "delete":
+				runDeleteInteractive()
+			case "list":
+				runList()
+			case "k8s":
+				runK8s()
+			case "clear":
+				runClear()
+			case "version":
+				runVersion()
+			}
 		}
 	},
 }
