@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
 	"github.com/JairoJSilva/minha-cli/internal/env"
 	"github.com/JairoJSilva/minha-cli/internal/tui"
+	"github.com/JairoJSilva/minha-cli/internal/vault"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
@@ -26,33 +25,6 @@ var switchCmd = &cobra.Command{
 	},
 }
 
-func checkAWSProfileExists(profile string) bool {
-	if profile == "" || profile == "default" {
-		return true
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return true
-	}
-
-	credPath := filepath.Join(home, ".aws", "credentials")
-	if data, err := os.ReadFile(credPath); err == nil {
-		if strings.Contains(string(data), "["+profile+"]") {
-			return true
-		}
-	}
-
-	confPath := filepath.Join(home, ".aws", "config")
-	if data, err := os.ReadFile(confPath); err == nil {
-		if strings.Contains(string(data), "["+profile+"]") || strings.Contains(string(data), "[profile "+profile+"]") {
-			return true
-		}
-	}
-
-	return false
-}
-
 func applyClientDirect(target string) {
 	client, err := config.FindClient(target)
 	if err != nil {
@@ -60,17 +32,56 @@ func applyClientDirect(target string) {
 		return
 	}
 
-	// 1. Gera o script shell e grava no IPC file para o terminal pai carregar
+	// ── Modo Vault: credenciais armazenadas de forma segura ──────────────────
+	if client.HasVaultSecret {
+		secret, err := vault.Get(client.ID)
+		if err != nil {
+			tui.Error(fmt.Sprintf("Falha ao ler credenciais do vault: %v", err))
+			tui.Warn("Tentando fallback para variáveis de ambiente...")
+		} else {
+			// Gera script com as credenciais reais do vault (nunca escritas em disco)
+			script := env.GenerateExportScriptFromVault(client, secret)
+			env.WriteEnvToFile(script)
+
+			// Feedback
+			tui.Success(fmt.Sprintf("🔐 Contexto ativado via Vault: %s", client.Name))
+			aws := "<nenhum>"
+			if secret.AWSAccessKeyID != "" {
+				aws = "🔐 via vault"
+			} else if client.AWSProfile != nil {
+				aws = *client.AWSProfile
+			}
+			oci := "<nenhum>"
+			if secret.OCIUserOCID != "" {
+				oci = "🔐 via vault"
+			} else if client.OCIProfile != nil {
+				oci = *client.OCIProfile
+			}
+			gcp := config.SafeString(client.GCPConfig)
+			if gcp == "" {
+				gcp = "<nenhum>"
+			}
+			k8s := config.SafeString(client.K8sContext)
+			if k8s == "" {
+				k8s = "<nenhum>"
+			}
+			fmt.Printf("  \033[2mAWS: %s | OCI: %s | GCP: %s | K8s: %s\033[0m\n", aws, oci, gcp, k8s)
+			fmt.Printf("  \033[2m⏱️  Sessão ativa — variáveis serão removidas ao fechar o terminal\033[0m\n")
+			return
+		}
+	}
+
+	// ── Modo Legacy: sem vault (profile-based) ───────────────────────────────
 	script := env.GenerateExportScript(client)
 	env.WriteEnvToFile(script)
 
-	// 2. Feedback visual
 	tui.Success(fmt.Sprintf("Contexto ativado: %s", client.Name))
 	aws := "<nenhum>"
 	if client.AWSProfile != nil {
 		aws = *client.AWSProfile
-		if !checkAWSProfileExists(aws) {
-			fmt.Printf("  \033[33m⚠️  Aviso: O profile AWS '%s' não está no ~/.aws/credentials. (Rode 'aws configure --profile %s' se precisar das chaves)\033[0m\n", aws, aws)
+		if !config.AWSProfileLocalExists(aws) {
+			fmt.Printf("  \033[33m⚠️  Aviso: O profile AWS '%s' não está no ~/.aws/credentials.\033[0m\n", aws)
+			fmt.Printf("  \033[33m   → Use 'mc add' para salvar as chaves no vault seguro.\033[0m\n")
 		}
 	}
 	oci := "<nenhum>"
@@ -98,7 +109,11 @@ func runSwitchInteractive() {
 
 	var options []huh.Option[string]
 	for _, c := range clients {
-		options = append(options, huh.NewOption(c.Name, c.ID))
+		label := c.Name
+		if c.HasVaultSecret {
+			label = "🔐 " + label
+		}
+		options = append(options, huh.NewOption(label, c.ID))
 	}
 	options = append(options, huh.NewOption("🧹 Limpar Contexto (Reset)", "clear"))
 

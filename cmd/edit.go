@@ -68,7 +68,7 @@ func runEditClientByID(selectedID string) {
 	}
 
 	// Se o AWS profile preenchido não existir no ~/.aws/credentials, oferece gravar
-	if aws != "" && !checkAWSProfileExists(aws) {
+	if aws != "" && !config.AWSProfileLocalExists(aws) {
 		formAWS := huh.NewForm(
 			huh.NewGroup(
 				huh.NewConfirm().

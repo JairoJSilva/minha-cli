@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
-	"github.com/JairoJSilva/minha-cli/internal/providers"
 	"github.com/JairoJSilva/minha-cli/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -19,6 +18,20 @@ var listCmd = &cobra.Command{
 	},
 }
 
+// credStatus retorna o indicador visual para uma credencial
+func credStatus(profileName string, hasVault bool, localCheckFn func(string) bool) string {
+	if profileName == "" {
+		return "-"
+	}
+	if hasVault {
+		return "🔐 " + profileName
+	}
+	if localCheckFn(profileName) {
+		return "✅ " + profileName
+	}
+	return "📋 " + profileName + " (sem credencial)"
+}
+
 func runList() {
 	clients, err := config.LoadClients()
 	if err != nil || len(clients) == 0 {
@@ -28,28 +41,45 @@ func runList() {
 
 	var sb strings.Builder
 	for _, c := range clients {
-		aws := config.SafeString(c.AWSProfile)
-		if aws == "" {
-			aws = "-"
-		}
-		oci := config.SafeString(c.OCIProfile)
-		if oci == "" {
-			oci = "-"
-		}
-		gcp := config.SafeString(c.GCPConfig)
-		if gcp == "" {
-			gcp = "-"
-		}
-		k8s := config.SafeString(c.K8sContext)
-		if k8s == "" {
-			k8s = "-"
+		vaultTag := ""
+		if c.HasVaultSecret {
+			vaultTag = " 🔐"
 		}
 
-		sb.WriteString(fmt.Sprintf(" • %s [ID: %s]\n", c.Name, c.ID))
-		sb.WriteString(fmt.Sprintf("   └─ AWS: %s | OCI: %s | GCP: %s | K8s: %s\n", aws, oci, gcp, k8s))
+		sb.WriteString(fmt.Sprintf(" • %s [ID: %s]%s\n", c.Name, c.ID, vaultTag))
+
+		// AWS
+		if aws := config.SafeString(c.AWSProfile); aws != "" {
+			sb.WriteString(fmt.Sprintf("   ├─ AWS  : %s\n",
+				credStatus(aws, c.HasVaultSecret, config.AWSProfileLocalExists)))
+		}
+
+		// OCI
+		if oci := config.SafeString(c.OCIProfile); oci != "" {
+			sb.WriteString(fmt.Sprintf("   ├─ OCI  : %s\n",
+				credStatus(oci, c.HasVaultSecret, config.OCIProfileLocalExists)))
+		}
+
+		// GCP
+		if gcp := config.SafeString(c.GCPConfig); gcp != "" {
+			sb.WriteString(fmt.Sprintf("   ├─ GCP  : %s\n",
+				credStatus(gcp, c.HasVaultSecret, config.GCPConfigLocalExists)))
+		}
+
+		// Azure (só referência, sem checagem local possível)
+		if azure := config.SafeString(c.AzureSub); azure != "" {
+			sb.WriteString(fmt.Sprintf("   ├─ Azure: %s\n", azure))
+		}
+
+		// K8s
+		if k8s := config.SafeString(c.K8sContext); k8s != "" {
+			sb.WriteString(fmt.Sprintf("   └─ K8s  : %s\n",
+				credStatus(k8s, false, config.K8sContextLocalExists)))
+		}
 	}
 
-	tui.PrintCard("PERFIS CADASTRADOS (GO ENGINE)", strings.TrimRight(sb.String(), "\n"))
+	legend := "\n  ✅ credencial local OK  📋 só referência (sem credencial)  🔐 no vault"
+	tui.PrintCard("PERFIS CADASTRADOS", strings.TrimRight(sb.String(), "\n")+"\n"+legend)
 }
 
 var k8sCmd = &cobra.Command{

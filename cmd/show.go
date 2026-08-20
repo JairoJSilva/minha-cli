@@ -33,7 +33,7 @@ func showClientDetails(target string) {
 	aws := config.SafeString(client.AWSProfile)
 	awsStatus := "Não configurado"
 	if aws != "" {
-		if checkAWSProfileExists(aws) {
+		if config.AWSProfileLocalExists(aws) {
 			awsStatus = "Configurado em ~/.aws/credentials"
 		} else {
 			awsStatus = "⚠️ Profile ausente no ~/.aws/credentials"

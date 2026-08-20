@@ -9,13 +9,16 @@ import (
 )
 
 type Client struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	AWSProfile *string `json:"aws_profile"`
-	OCIProfile *string `json:"oci_profile"`
-	GCPConfig  *string `json:"gcp_config"`
-	AzureSub   *string `json:"azure_sub"`
-	K8sContext *string `json:"k8s_context"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	AWSProfile     *string `json:"aws_profile"`
+	AWSAuthMode    string  `json:"aws_auth_mode,omitempty"`  // "profile" (default) ou "sts"
+	AWSRoleARN     *string `json:"aws_role_arn,omitempty"`   // opcional, para AssumeRole
+	OCIProfile     *string `json:"oci_profile"`
+	GCPConfig      *string `json:"gcp_config"`
+	AzureSub       *string `json:"azure_sub"`
+	K8sContext     *string `json:"k8s_context"`
+	HasVaultSecret bool    `json:"has_vault_secret,omitempty"` // Fase 2: credencial salva no vault
 }
 
 // Helper para converter string em ponteiro de string
@@ -59,37 +62,8 @@ func LoadClients() ([]Client, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Retorna lista padrão se não existir
-			defaultClients := []Client{
-				{
-					ID:         "maida",
-					Name:       "Maida (AWS, GCP, Azure)",
-					AWSProfile: StringPtr("maida"),
-					GCPConfig:  StringPtr("maida"),
-					AzureSub:   StringPtr("ID-SUBSCRIPTION-MAIDA"),
-				},
-				{
-					ID:         "dentalis",
-					Name:       "Dentalis (AWS)",
-					AWSProfile: StringPtr("dentalis"),
-				},
-				{
-					ID:         "farmacia",
-					Name:       "Farmacia Digital (AWS, GCP, Azure)",
-					AWSProfile: StringPtr("farmacia"),
-					GCPConfig:  StringPtr("farmacia"),
-					AzureSub:   StringPtr("ID-SUBSCRIPTION-FARMACIA"),
-				},
-				{
-					ID:         "flowti",
-					Name:       "Flowti / Pessoal (AWS, Oracle OCI)",
-					AWSProfile: StringPtr("flowti"),
-					OCIProfile: StringPtr("pessoal"),
-					K8sContext: StringPtr("oci-mv-devops"),
-				},
-			}
-			_ = SaveClients(defaultClients)
-			return defaultClients, nil
+			// Nenhum cliente cadastrado ainda — base começa vazia
+			return []Client{}, nil
 		}
 		return nil, err
 	}

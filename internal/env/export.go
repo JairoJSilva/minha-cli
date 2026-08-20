@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
+	"github.com/JairoJSilva/minha-cli/internal/vault"
 )
 
 type ActiveState struct {
@@ -87,6 +88,75 @@ func GenerateExportScript(c *config.Client) string {
 	if c.AzureSub != nil && *c.AzureSub != "" {
 		sb.WriteString(fmt.Sprintf("export AZURE_SUBSCRIPTION=\"%s\"\n", *c.AzureSub))
 		sb.WriteString(fmt.Sprintf("if command -v az >/dev/null 2>&1; then az account set --subscription \"%s\" >/dev/null 2>&1 || true; fi\n", *c.AzureSub))
+	} else {
+		sb.WriteString("unset AZURE_SUBSCRIPTION\n")
+	}
+
+	// Kubernetes
+	if c.K8sContext != nil && *c.K8sContext != "" {
+		sb.WriteString(fmt.Sprintf("if command -v kubectl >/dev/null 2>&1; then kubectl config use-context \"%s\" >/dev/null 2>&1 || true; fi\n", *c.K8sContext))
+	}
+
+	return sb.String()
+}
+
+// GenerateExportScriptFromVault gera o script shell usando credenciais reais do vault.
+// As chaves são injetadas diretamente como variáveis de ambiente efêmeras —
+// não dependem de ~/.aws/credentials e somem quando o terminal é fechado.
+func GenerateExportScriptFromVault(c *config.Client, secret *vault.VaultSecret) string {
+	var sb strings.Builder
+
+	// AWS — usa chaves reais do vault
+	if secret.AWSAccessKeyID != "" {
+		sb.WriteString(fmt.Sprintf("export AWS_ACCESS_KEY_ID=\"%s\"\n", secret.AWSAccessKeyID))
+		sb.WriteString(fmt.Sprintf("export AWS_SECRET_ACCESS_KEY=\"%s\"\n", secret.AWSSecretAccessKey))
+		if secret.AWSSessionToken != "" {
+			sb.WriteString(fmt.Sprintf("export AWS_SESSION_TOKEN=\"%s\"\n", secret.AWSSessionToken))
+		}
+		if secret.AWSRegion != "" {
+			sb.WriteString(fmt.Sprintf("export AWS_DEFAULT_REGION=\"%s\"\n", secret.AWSRegion))
+		}
+		// Limpa o profile para não conflitar
+		sb.WriteString("unset AWS_PROFILE\n")
+		sb.WriteString("unset AWS_DEFAULT_PROFILE\n")
+	} else if c.AWSProfile != nil && *c.AWSProfile != "" {
+		// Fallback: usa profile se não tiver chaves
+		sb.WriteString(fmt.Sprintf("export AWS_PROFILE=\"%s\"\n", *c.AWSProfile))
+		sb.WriteString(fmt.Sprintf("export AWS_DEFAULT_PROFILE=\"%s\"\n", *c.AWSProfile))
+	} else {
+		sb.WriteString("unset AWS_PROFILE\n")
+		sb.WriteString("unset AWS_DEFAULT_PROFILE\n")
+		sb.WriteString("unset AWS_ACCESS_KEY_ID\n")
+		sb.WriteString("unset AWS_SECRET_ACCESS_KEY\n")
+	}
+
+	// OCI — usa o profile configurado (chave privada permanece no sistema)
+	if secret.OCIUserOCID != "" {
+		sb.WriteString(fmt.Sprintf("export OCI_CLI_USER=\"%s\"\n", secret.OCIUserOCID))
+		sb.WriteString(fmt.Sprintf("export OCI_CLI_TENANCY=\"%s\"\n", secret.OCITenancyOCID))
+		sb.WriteString(fmt.Sprintf("export OCI_CLI_FINGERPRINT=\"%s\"\n", secret.OCIFingerprint))
+		if secret.OCIPrivateKeyPath != "" {
+			sb.WriteString(fmt.Sprintf("export OCI_CLI_KEY_FILE=\"%s\"\n", secret.OCIPrivateKeyPath))
+		}
+		if secret.OCIRegion != "" {
+			sb.WriteString(fmt.Sprintf("export OCI_CLI_REGION=\"%s\"\n", secret.OCIRegion))
+		}
+	} else if c.OCIProfile != nil && *c.OCIProfile != "" {
+		sb.WriteString(fmt.Sprintf("export OCI_CLI_PROFILE=\"%s\"\n", *c.OCIProfile))
+	} else {
+		sb.WriteString("unset OCI_CLI_PROFILE\n")
+	}
+
+	// GCP
+	if c.GCPConfig != nil && *c.GCPConfig != "" {
+		sb.WriteString(fmt.Sprintf("export CLOUDSDK_ACTIVE_CONFIG_NAME=\"%s\"\n", *c.GCPConfig))
+	} else {
+		sb.WriteString("unset CLOUDSDK_ACTIVE_CONFIG_NAME\n")
+	}
+
+	// Azure
+	if c.AzureSub != nil && *c.AzureSub != "" {
+		sb.WriteString(fmt.Sprintf("export AZURE_SUBSCRIPTION=\"%s\"\n", *c.AzureSub))
 	} else {
 		sb.WriteString("unset AZURE_SUBSCRIPTION\n")
 	}

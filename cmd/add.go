@@ -9,6 +9,7 @@ import (
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
 	"github.com/JairoJSilva/minha-cli/internal/tui"
+	"github.com/JairoJSilva/minha-cli/internal/vault"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,6 @@ func saveAWSCredential(profile, accessKey, secretKey string) error {
 		content = string(data)
 	}
 
-	// Se o profile já existe no credentials, avisa
 	if strings.Contains(content, "["+profile+"]") {
 		return nil
 	}
@@ -62,9 +62,8 @@ func runAddInteractive() {
 	fmt.Println("\n➕ Cadastrar Nova Conta / Cliente")
 
 	var name, id, aws, oci, gcp, azure, k8s string
-	var configAWSKeys bool
-	var awsAccessKey, awsSecretKey string
 
+	// ── Etapa 1: Metadados ──────────────────────────────────────────────────
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -123,7 +122,7 @@ func runAddInteractive() {
 		id = strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(name, ""))
 	}
 
-	// Se o cliente já existe, oferece edição imediata em vez de erro
+	// Se o cliente já existe, oferece edição imediata
 	if existing, err := config.FindClient(id); err == nil && existing != nil {
 		var wantEdit bool
 		formRedirect := huh.NewForm(
@@ -141,46 +140,117 @@ func runAddInteractive() {
 		return
 	}
 
-	// Se preencheu AWS profile, pergunta se deseja salvar chaves no ~/.aws/credentials
-	if aws != "" && !checkAWSProfileExists(aws) {
-		formAWS := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title(fmt.Sprintf("O profile AWS '%s' ainda não existe no ~/.aws/credentials. Deseja cadastrar as chaves agora?", aws)).
-					Value(&configAWSKeys),
-			),
-		)
-		_ = formAWS.Run()
+	// ── Etapa 2: Credenciais no Vault ────────────────────────────────────────
+	var saveToVault bool
+	formVault := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("🔐 Deseja salvar as credenciais de acesso neste cliente no Vault seguro?").
+				Description("As chaves ficam criptografadas em ~/.config/minha-cli/vault.enc").
+				Value(&saveToVault),
+		),
+	)
+	_ = formVault.Run()
 
-		if configAWSKeys {
-			formKeys := huh.NewForm(
+	hasVaultSecret := false
+
+	if saveToVault {
+		secret := vault.VaultSecret{}
+
+		// AWS Credentials
+		if aws != "" {
+			var awsKey, awsSecret, awsRegion string
+			var awsAuthMode string
+
+			formAWSMode := huh.NewForm(
 				huh.NewGroup(
-					huh.NewInput().
-						Title("AWS Access Key ID").
-						Placeholder("AKIA...").
-						Value(&awsAccessKey),
-					huh.NewInput().
-						Title("AWS Secret Access Key").
-						EchoMode(huh.EchoModePassword).
-						Value(&awsSecretKey),
+					huh.NewSelect[string]().
+						Title("Modo de autenticação AWS").
+						Options(
+							huh.NewOption("🔑 Profile (Access Key + Secret)", "profile"),
+							huh.NewOption("🎫 STS Token Temporário (AssumeRole/MFA)", "sts"),
+						).
+						Value(&awsAuthMode),
 				),
 			)
-			_ = formKeys.Run()
-			if awsAccessKey != "" && awsSecretKey != "" {
-				_ = saveAWSCredential(aws, awsAccessKey, awsSecretKey)
-				tui.Success(fmt.Sprintf("Chaves da AWS salvas com sucesso no ~/.aws/credentials para o perfil '%s'!", aws))
+			if err := formAWSMode.Run(); err == nil {
+				formAWSCreds := huh.NewForm(
+					huh.NewGroup(
+						huh.NewInput().
+							Title("AWS Access Key ID").
+							Placeholder("AKIA...").
+							Value(&awsKey),
+						huh.NewInput().
+							Title("AWS Secret Access Key").
+							EchoMode(huh.EchoModePassword).
+							Value(&awsSecret),
+						huh.NewInput().
+							Title("AWS Region").
+							Placeholder("us-east-1").
+							Value(&awsRegion),
+					),
+				)
+				if err := formAWSCreds.Run(); err == nil && awsKey != "" {
+					secret.AWSAccessKeyID = awsKey
+					secret.AWSSecretAccessKey = awsSecret
+					secret.AWSRegion = awsRegion
+					if awsAuthMode == "sts" {
+						var roleARN string
+						formRole := huh.NewForm(
+							huh.NewGroup(
+								huh.NewInput().
+									Title("ARN do Role para AssumeRole (opcional)").
+									Placeholder("arn:aws:iam::123456789012:role/MyRole").
+									Value(&roleARN),
+							),
+						)
+						_ = formRole.Run()
+						secret.AWSRoleARN = roleARN
+					}
+				}
 			}
+		}
+
+		// OCI Credentials
+		if oci != "" {
+			var ociUser, ociTenancy, ociFingerprint, ociKeyPath, ociRegion string
+			formOCI := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().Title("OCI User OCID").Placeholder("ocid1.user.oc1..").Value(&ociUser),
+					huh.NewInput().Title("OCI Tenancy OCID").Placeholder("ocid1.tenancy.oc1..").Value(&ociTenancy),
+					huh.NewInput().Title("OCI Fingerprint").Placeholder("xx:xx:xx:...").Value(&ociFingerprint),
+					huh.NewInput().Title("Caminho da Chave Privada OCI").Placeholder("~/.oci/oci_api_key.pem").Value(&ociKeyPath),
+					huh.NewInput().Title("OCI Region").Placeholder("sa-saopaulo-1").Value(&ociRegion),
+				),
+			)
+			if err := formOCI.Run(); err == nil && ociUser != "" {
+				secret.OCIUserOCID = ociUser
+				secret.OCITenancyOCID = ociTenancy
+				secret.OCIFingerprint = ociFingerprint
+				secret.OCIPrivateKeyPath = ociKeyPath
+				secret.OCIRegion = ociRegion
+			}
+		}
+
+		// Salva no vault
+		if err := vault.Store(id, secret); err != nil {
+			tui.Error(fmt.Sprintf("Falha ao salvar no vault: %v", err))
+		} else {
+			hasVaultSecret = true
+			tui.Success(fmt.Sprintf("Credenciais salvas com segurança no vault! (%s)", vault.VaultFilePath()))
 		}
 	}
 
+	// ── Etapa 3: Salva metadados no clients.json ─────────────────────────────
 	client := config.Client{
-		ID:         id,
-		Name:       name,
-		AWSProfile: config.StringPtr(aws),
-		OCIProfile: config.StringPtr(oci),
-		GCPConfig:  config.StringPtr(gcp),
-		AzureSub:   config.StringPtr(azure),
-		K8sContext: config.StringPtr(k8s),
+		ID:             id,
+		Name:           name,
+		AWSProfile:     config.StringPtr(aws),
+		OCIProfile:     config.StringPtr(oci),
+		GCPConfig:      config.StringPtr(gcp),
+		AzureSub:       config.StringPtr(azure),
+		K8sContext:     config.StringPtr(k8s),
+		HasVaultSecret: hasVaultSecret,
 	}
 
 	if err := config.AddClient(client); err != nil {
