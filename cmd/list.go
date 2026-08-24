@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
+	"github.com/JairoJSilva/minha-cli/internal/providers"
 	"github.com/JairoJSilva/minha-cli/internal/tui"
 	"github.com/spf13/cobra"
 )

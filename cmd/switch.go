@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/JairoJSilva/minha-cli/internal/config"
 	"github.com/JairoJSilva/minha-cli/internal/env"
