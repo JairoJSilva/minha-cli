@@ -58,9 +58,15 @@ var (
 )
 
 func PrintBanner() {
-	title := BannerTitle.Render("☁️  MINHA-CLI (GO EDITION) — MULTI-CLOUD CONTEXT")
+	logo := GetLogo()
+	title := BannerTitle.Render("☁️  LLAVERO / MINHA-CLI (GO EDITION) — MULTI-CLOUD VAULT")
 	sub := BannerSub.Render("AWS • Oracle OCI • Google Cloud • Azure • Kubernetes (SRE Powered)")
-	content := fmt.Sprintf("%s\n%s", title, sub)
+	var content string
+	if logo != "" {
+		content = fmt.Sprintf("%s\n%s\n%s", logo, title, sub)
+	} else {
+		content = fmt.Sprintf("%s\n%s", title, sub)
+	}
 	fmt.Println(BannerBox.Render(content))
 }
 
