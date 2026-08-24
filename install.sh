@@ -131,3 +131,7 @@ echo -e "  ${C_GREEN}mc status${C_RESET}        Mostra o card com o contexto e c
 echo -e "  ${C_GREEN}mc test${C_RESET}          Testa credenciais em paralelo ultra-rápido (Goroutines)"
 echo -e "  ${C_GREEN}mc clear${C_RESET}         Limpa todas as variáveis de ambiente das nuvens"
 echo ""
+
+# Reinicia o shell automaticamente para carregar as novas funções no terminal atual
+echo -e "${C_YELLOW}🔄 Reiniciando o terminal para aplicar as alterações automaticamente...${C_RESET}"
+exec "$SHELL"
